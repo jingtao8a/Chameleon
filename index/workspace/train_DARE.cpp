@@ -3,14 +3,11 @@
 //
 #include <iostream>
 #include <unistd.h>
-#include <semaphore.h>
-#include <fcntl.h>
-#include <sys/mman.h>
 
 class RunningStatus {
 public:
     double random_rate = 1;
-    long long exp_num = 0;
+    long long exp_num = 0;//experience目录下sample生成的下一个exp文件的编号
     char buffer[4096]{};
 };
 #define using_small_network
@@ -18,14 +15,15 @@ public:
 #include "../include/Parameter.h"
 #include "../include/Controller.hpp"
 #include "../include/Index.hpp"
-#include "../include/experience.hpp"
 #include <c10/cuda/CUDAGuard.h>
 
 #define sample_batch 5
 #define using_model
 
+static TimerClock tc;
+
 [[noreturn]] void sample(int pid){
-    auto *rs = get_shared_memory<RunningStatus>();
+    auto *rs = get_shared_memory<RunningStatus>();//用于进程间通信
     std::vector<experience_t> exps_local;
 #ifdef using_model
     GlobalController controller;
@@ -35,7 +33,6 @@ public:
     std::vector<std::string> dataset_names = scanFiles(data_father_path);
     auto file = std::fopen((experience_father_path + std::to_string(rs->exp_num++) + ".exp").c_str(), "w");
     while(true){
-        double random_rate = rs->random_rate;
 #ifdef using_model
         controller.load_in();
 #endif
@@ -45,37 +42,39 @@ public:
 #endif
             Hits::inner_cost = 0;
             Hits::leaf_cost = 0;
-            int random_length = shrink_dataset_size(
-                    int(std::pow(random_u_0_1(), 1) *
-                        double(max_data_set_size - min_data_set_size)) + min_data_set_size);
+            int random_length = shrink_dataset_size(int(std::pow(random_u_0_1(), 1) * double(max_data_set_size - min_data_set_size)) + min_data_set_size);
+            //随机选取一个数据集存储到dataset
             auto dataset_name = dataset_names[e() % dataset_names.size()];
-            auto dataset = dataset_source::get_dataset<std::pair<KEY_TYPE, VALUE_TYPE>>(
-                    data_father_path + dataset_name);
+            auto dataset = dataset_source::get_dataset<std::pair<KEY_TYPE, VALUE_TYPE>>(data_father_path + dataset_name);
             std::shuffle(dataset.begin(), dataset.end(),e);
+
+            //随机截断dataset并排序，阶段后的dataset的长度为random_length
             random_length = std::min(random_length, int(float(dataset.size()) * float(0.9 + random_u_0_1() * 0.1)));
             auto random_start = (int) (e() % (dataset.size() - random_length));
             std::sort(dataset.begin() + random_start, dataset.begin() + random_start + random_length,
                       [=](std::pair<KEY_TYPE, VALUE_TYPE> &a,std::pair<KEY_TYPE, VALUE_TYPE> &b){return a.first < b.first;});
+
+            //将dataset的pdf 存储到exp_chosen的distribution
+            //将dataset的size 存储到exp_chosen的data_size中
             auto min_max = get_min_max<KEY_TYPE,VALUE_TYPE>(dataset.begin() + random_start, dataset.begin() + random_start + random_length);
             auto pdf = get_pdf<KEY_TYPE,VALUE_TYPE>(dataset.begin() + random_start, dataset.begin() + random_start + random_length, min_max.first, min_max.second,BUCKET_SIZE);
             std::copy(pdf.begin(),pdf.end(),exp_chosen.distribution);
             exp_chosen.data_size = float(random_length);
-#ifdef using_model
-//            auto conf = controller.get_best_action_GA(exp_chosen).conf * float(1 - random_rate)
-//                        + Hits::Configuration::random_configuration() * float(random_rate);
+
+            //随机生成一个conf 存储到exp_chosen的conf中
             auto conf = Hits::Configuration::random_configuration();
-#else
-            auto conf = Hits::Configuration::random_configuration();
-#endif
             exp_chosen.conf = conf;
+
+            //构建Hits
             auto index = new Hits::Index<KEY_TYPE, VALUE_TYPE>(conf, min_max.first, min_max.second);
             index->bulk_load(dataset.begin() + random_start, dataset.begin() + random_start + random_length);
+
+            //计算memory和get_cost 存储到 exp_chosen的cost中
             auto memory = index->memory_occupied() / float(float(random_length) *(sizeof(Hits::DataNode<KEY_TYPE,VALUE_TYPE>::slot_type)));
             VALUE_TYPE value;
             Hits::inner_cost = 0;
-            for (auto i=dataset.begin() + random_start,
-                    end=dataset.begin() + random_start + random_length;i < end;++i) {
-                if (!index->get_with_cost(i->first, value)) {
+            for (auto i=dataset.begin() + random_start, end=dataset.begin() + random_start + random_length;i < end;++i) {
+                if (!index->get_with_cost(i->first, value)) {//计算get操作开销
                     std::cout << "get error:" << i->first << std::endl;
                 }
             }
@@ -83,6 +82,7 @@ public:
             exp_chosen.cost.memory = memory;
             exp_chosen.cost.get = get_cost;
             delete index;
+
             std::cout <<"memory:query:"<<controller.memory_weight<<":"<<controller.query_weight;
             std::cout << BLUE <<" pid:"<<pid << " speed : " << "   "<< 3600 / tc_speed.get_timer_second() << "/hour  " << RESET;
             tc_speed.synchronization();
@@ -99,7 +99,7 @@ public:
     }
 }
 
-[[noreturn]] [[noreturn]] void train(){
+[[noreturn]] void train(){
     auto q_model = std::make_shared<Global_Q_network>(Global_Q_network());
     q_model->to(GPU_DEVICE);
     q_model->train();
@@ -143,22 +143,22 @@ public:
 int main(int argc, char const *argv[]) {
 
     double random_rate_discount_rate = 0.9997;
-//    double random_rate_discount_rate = 0.993;
-    auto *rs = create_shared_memory<RunningStatus>();
+
+    auto *rs = create_shared_memory<RunningStatus>();//共享内存的方式创建 RunningStatus
     rs->random_rate = 1;
     std::cout << "rs->random_rate:" <<rs->random_rate << std::endl;
     const int process_count = 3;
     const int process_count2= 5;
-//    clear_exp(experience_father_path,scanFiles(experience_father_path));
-//    remove(q_model_path.c_str());
+
     rs->exp_num = max_exp_number(scanFiles(experience_father_path)) + 1;
 
     int pid = 0;
-//    sample(pid);
+
     GPU_DEVICE = torch::Device(torch::DeviceType::CUDA,1);
-    for ( auto i = 0; i < process_count; i++) {
+    for ( auto i = 0; i < process_count; i++) {//总共开启3个进程
         random_seed();
         if (fork() == 0) {
+            //开启一个sample进程
             random_seed();
             sample(pid);
         }
@@ -169,9 +169,10 @@ int main(int argc, char const *argv[]) {
     }
     random_seed();
     GPU_DEVICE = torch::Device(torch::DeviceType::CUDA,0);
-    for (auto i = 0; i < process_count2; i++) {
+    for (auto i = 0; i < process_count2; i++) {//总共开启5个进程
         random_seed();
         if (fork() == 0) {
+            //开启一个sample进程
             random_seed();
             sample(pid);
         }
@@ -180,11 +181,12 @@ int main(int argc, char const *argv[]) {
         usleep(100000);
         random_seed();
     }
+    //主进程等待采样到100个experience_t
     for(auto sample_size=count_exp(scanFiles(experience_father_path)) ;sample_size< 100;sample_size = count_exp(scanFiles(experience_father_path))){
         std::cout <<"waiting for more samples !  --->"<<sample_size<<std::endl;
         sleep(1);
     }
-    if(fork() == 0){
+    if(fork() == 0){//开启训练进程
         puts("start training !");
         train();
     }

@@ -160,5 +160,5 @@ T *get_shared_memory(std::string path = "./", int id = 2023) {
     if (pointer == nullptr) { throw MyException("shmat"); }
     return pointer;
 }
-TimerClock tc;
+
 #endif //DEFINES_H

@@ -17,6 +17,8 @@
 
 std::vector<int> query_dis;
 
+static TimerClock tc;
+
 std::vector<int> Zipf_GenData(int n) {
     std::vector<int> result;
     std::random_device rd;

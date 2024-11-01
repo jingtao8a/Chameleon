@@ -19,8 +19,8 @@
 
 class LN : public torch::nn::Module {
 public:
-    torch::nn::BatchNorm1d bn = nullptr;
-    torch::nn::Linear ln = nullptr;
+    torch::nn::BatchNorm1d bn = nullptr;//批量归一化
+    torch::nn::Linear ln = nullptr;//全连接层
 
     LN(std::int_fast32_t input_size, std::int_fast32_t output_size) {
         bn = register_module("b", torch::nn::BatchNorm1d(torch::nn::BatchNorm1dOptions(input_size)));
@@ -38,9 +38,9 @@ public:
 
 class CV_1d : public torch::nn::Module {
 public:
-    torch::nn::Conv1d cv = nullptr;
-    torch::nn::BatchNorm1d bn = nullptr;
-    torch::nn::MaxPool1d pool = nullptr;
+    torch::nn::Conv1d cv = nullptr;//1维卷积
+    torch::nn::BatchNorm1d bn = nullptr;//批量归一化
+    torch::nn::MaxPool1d pool = nullptr;//1维最大池化
 
     CV_1d(int input_channel, int output_channel,
           int cnn_kernel, int cnn_stride, int cnn_padding,
@@ -200,7 +200,5 @@ public:
         return x;
     }
 };
-
-
 
 #endif //Q_MODEL_HPP

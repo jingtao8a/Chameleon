@@ -23,7 +23,7 @@ int sleep_time = 0;
 
 int bulkload_size = 40000000;
 int batch_query = 100000;
-
+static TimerClock tc;
 GlobalController controller;
 
 Cost hits_evaluation(std::vector<std::pair<KEY_TYPE, VALUE_TYPE>> dataset,

@@ -161,9 +161,8 @@ int main() {
 
     std::vector<std::string> dataset_names = scanFiles(data_father_path);
     for (auto &dataset_name: dataset_names) {
-        dataset_name  = "wiki.data";
         auto dataset = dataset_source::get_dataset<std::pair<KEY_TYPE, VALUE_TYPE>>(
-                "/home/redamancyguy/Desktop/buffer/data/train_dataset/" + dataset_name);
+                "/home/chengang/chengang/jingtao8a/Chameleon/data/data_set/" + dataset_name);
         std::sort(dataset.begin(), dataset.end());
         {
             auto min_max = get_min_max<KEY_TYPE, VALUE_TYPE>(dataset.begin() , dataset.end() );
@@ -177,7 +176,7 @@ int main() {
             for(auto &i:cdf){
                 i /= acc;
             }
-            std::ofstream file("picture/"+dataset_name+".txt");
+            std::ofstream file("/home/chengang/chengang/jingtao8a/Chameleon/picture/"+dataset_name+".txt");
             for(auto i:cdf){
                 file <<i<<",";
             }
@@ -198,7 +197,7 @@ int main() {
             for (auto &i: cdf) {
                 i /= acc;
             }
-            std::ofstream file("picture/" + dataset_name + "-local.txt" + std::to_string(i));
+            std::ofstream file("/home/chengang/chengang/jingtao8a/Chameleon/picture/" + dataset_name + "-local.txt" + std::to_string(i));
             for (auto i: cdf) {
                 file << i << ",";
             }

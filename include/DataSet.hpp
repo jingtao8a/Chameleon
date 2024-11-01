@@ -10,20 +10,19 @@
 #include <fstream>
 #include <boost/math/distributions/normal.hpp>
 #include "DEFINE.h"
-#include "FIleLock.hpp"
 
 class dataset_source {
 public:
+    //写入数据
     template<class data_type>
     static void set_dataset(const std::string &filename, const std::vector<data_type> &dataset_input) {
         std::FILE *out_file = std::fopen(filename.c_str(), "wb");
         std::fwrite(dataset_input.data(), sizeof(data_type), dataset_input.size(), out_file);
         std::fclose(out_file);
     }
-
+    //读取数据
     template<class data_type>
     static std::vector<data_type> get_dataset(const std::string &filename) {
-//        std::cout << "filename:" << filename << std::endl;
         std::FILE *in_file = std::fopen(filename.c_str(), "rb");
         std::fseek(in_file, 0, SEEK_END);
         std::size_t size = ::ftell(in_file) / sizeof(data_type);
@@ -52,10 +51,9 @@ public:
         std::shuffle(result.begin(), result.end(), tmp_e);
         return result;
     }
-
-private:
 };
 
+//获取迭代器[begin, end)区间的最大和最小值
 template<class key_T, class value_T>
 std::pair<key_T, key_T> get_min_max(typename std::vector<std::pair<key_T, value_T>>::const_iterator begin,
                                     typename std::vector<std::pair<key_T, value_T>>::const_iterator end) {
@@ -72,6 +70,7 @@ std::pair<key_T, key_T> get_min_max(typename std::vector<std::pair<key_T, value_
     return result;
 }
 
+//获取pdf概率密度函数
 template<class key_T, class value_T>
 std::vector<float> get_pdf(
         typename std::vector<std::pair<key_T, value_T>>::const_iterator begin,
@@ -125,7 +124,6 @@ std::vector<std::pair<double, double>> create_dataset(std::size_t length = 200e6
     return result;
 }
 
-
 template<class key_T, class value_T>
 double local_skew(typename std::vector<std::pair<key_T, value_T>>::const_iterator begin,
                   typename std::vector<std::pair<key_T, value_T>>::const_iterator end,
@@ -137,7 +135,6 @@ double local_skew(typename std::vector<std::pair<key_T, value_T>>::const_iterato
         auto key_right = ((start)->first - lower) / (upper - lower);
         pq.push(1 / (n_1 * (key_right - key_left)));
     }
-//    return result_count / ( n_1);
     while(pq.size() > 1){
         auto a = pq.top();
         pq.pop();
@@ -148,7 +145,6 @@ double local_skew(typename std::vector<std::pair<key_T, value_T>>::const_iterato
     auto end_value = pq.top();
     return end_value / (n_1);
 }
-
 
 template<class key_T, class value_T>
 double local_skew2(typename std::vector<std::pair<key_T, value_T>>::const_iterator begin,

@@ -15,18 +15,8 @@ const float min_density = 0.35;
 const float default_density = 0.65;
 const float max_density = 0.95;
 
-
-//const float min_density = 0.5;
-//const float default_density = 0.7;
-//const float max_density = 0.9;
-
-//float calculate_density(float size, float probability = 0.9){
-//    return size * (size - 1) / -(std::log(1-probability));
-//}
 double hash_factor = 10231023.353;
-//double hash_factor=1;
-//double  hash_factor = 131.3;
-//#define inner_cost_weight (float(6.01213))
+
 #define inner_cost_weight (float(60.01213))
 #define leaf_cost_weight (float(1.35074178))
 
@@ -34,18 +24,24 @@ inline double forward_with_parameters(double lower, double upper, double capacit
     return capacity * ((x - lower) / (upper - lower));
 }
 
+//对于InnerNode bitmap用于表示position指向的Node为InnerNode(为1) 或者 DataNode(为0)
+//对于DataNode bitmap用于表示position指向的位置的key 存在(为1) 或者 不存在(为0)
+
+//判断position的位置是否置为1
 inline bool get_bitmap(const unsigned int *bitmap, const unsigned int position) {
     unsigned int index = position >> 5;
     unsigned int bit_index = position - (index << 5);
     return (bitmap[index] >> bit_index) & 1;
 }
 
+//将position的位置清0
 inline void de_set_bitmap(unsigned int *bitmap, const unsigned int position) {
     unsigned int index = position >> 5;
     unsigned int bit_index = position - (index << 5);
     bitmap[index] &= ~(1 << bit_index);
 }
 
+//将position的位置设置为1
 inline void set_bitmap(unsigned int *bitmap, const unsigned int position) {
     unsigned int index = position >> 5;
     unsigned int bit_index = position - (index << 5);
@@ -53,10 +49,10 @@ inline void set_bitmap(unsigned int *bitmap, const unsigned int position) {
 }
 
 namespace Hits {
-    unsigned long long node_memory_count = 0;
+    unsigned long long node_memory_count = 0;//Hist占用内存空间(byte)
     long long inner_cost = 0;
     long long leaf_cost = 0;
-    long long leaf_max_cost = 0;
+    long long leaf_max_cost = 0;//在叶子节点中last-mile search 的最大开销
 
     template<class key_T, class value_T>
     class DataNode {
@@ -64,27 +60,24 @@ namespace Hits {
         using self_type = DataNode;
         using slot_type = std::pair<key_T, value_T>;
     public:
-        double lower{0};
-        double upper{0};
-        int capacity{-1};
+        double lower{0};//N_ij.lk
+        double upper{0};//N_ij.uk
+        int capacity{-1};//N_ij.c
 
         [[nodiscard]] inline double forward(double key) const {
             return std::min(double(capacity - 1), std::max(0.0, forward_with_parameters(lower, upper, capacity, key)));
         }
 
         ///////
-        int size{};
-        int max_offset{};
+        int size{};//N_ij.n
+        int max_offset{};//N_ij.cd
         slot_type array[0];
-
 
         inline unsigned int *bitmap_start() {
             return (unsigned int *) (array + capacity);
         }
 
-        inline
-        static self_type *
-        new_segment(int capacity, double lower, double upper) {
+        inline static self_type * new_segment(int capacity, double lower, double upper) {
             int t = ((capacity >> 5) + 1);
             auto memory_size = sizeof(self_type) + sizeof(slot_type) * capacity + sizeof(unsigned int) * t;
             auto node = (self_type *) std::malloc(memory_size);
@@ -104,9 +97,7 @@ namespace Hits {
             return node;
         }
 
-        inline
-        static void
-        delete_segment(self_type *node) {
+        inline static void delete_segment(self_type *node) {
             node_memory_count -= sizeof(self_type) + sizeof(slot_type) * node->capacity +
                                  sizeof(unsigned int) * ((node->capacity >> 5) + 1);
             std::free(node);
@@ -163,7 +154,7 @@ namespace Hits {
 
         int find_insert(double key) {
             int position = hash(key);
-            int length = (capacity >> 1) + 1;
+            int length = (capacity >> 1) + 1;//max_offset最大可以设置为 ((capacity / 2) + 1)
             int i = 0;
             int left = position;
             int right = position;
@@ -176,17 +167,13 @@ namespace Hits {
                 }
                 if (!get_bitmap(bitmap_start(), left)) {
                     return left;
-                } else {
-                    if (array[left].first == key) {
-                        return -1;
-                    }
+                } else if (array[left].first == key) {//key已经存在
+                    return -1;
                 }
                 if (!get_bitmap(bitmap_start(), right)) {
                     return right;
-                } else {
-                    if (array[right].first == key) {
-                        return -1;
-                    }
+                } else if (array[right].first == key) {//key已经存在
+                    return -1;
                 }
             }
             for (; i <= length; ++i,--left,++right) {
@@ -213,7 +200,7 @@ namespace Hits {
     template<class key_T, class value_T>
     class InnerNode {
     public:
-        struct Slot {
+        struct Slot {//为指向InnerNode 或 DataNode的指针
             union {
                 InnerNode *inner_node;
                 DataNode<key_T, value_T> *data_node;
@@ -222,19 +209,18 @@ namespace Hits {
         using self_type = InnerNode;
         using slot_type = Slot;
     public:
-        double lower{0};
-        double upper{0};
-        int capacity{-1};
+        double lower{0};//N_ij.lk
+        double upper{0};//N_ij.uk
+        int capacity{-1};//N_ij.c
 
         [[nodiscard]] inline auto forward(double key) const {
             return std::min(int(capacity - 1), std::max(0, int(forward_with_parameters(lower, upper, capacity, key))));
         }
 
-        [[nodiscard]] inline
-        std::pair<double, double> sub_interval(int position) const {
+        //获取position指向的子节点表示的区间
+        [[nodiscard]] inline std::pair<double, double> sub_interval(int position) const {
             auto slot_interval = (upper - lower) / double(capacity);
-            return {slot_interval * double(position) + lower,
-                    slot_interval * double(position + 1) + lower};
+            return {slot_interval * double(position) + lower,slot_interval * double(position + 1) + lower};
         }
 
         ///////
@@ -244,9 +230,7 @@ namespace Hits {
             return (unsigned int *) (array + capacity);
         }
 
-        inline
-        static self_type *
-        new_segment(int capacity, double lower, double upper) {
+        inline static self_type *new_segment(int capacity, double lower, double upper) {
             int t = ((capacity >> 5) + 1);
             auto memory_size = sizeof(self_type) + sizeof(slot_type) * capacity + sizeof(unsigned int) * t;
             auto node = (self_type *) std::malloc(memory_size);
@@ -261,11 +245,8 @@ namespace Hits {
             return node;
         }
 
-        inline
-        static void
-        delete_segment(self_type *node) {
-            node_memory_count -= sizeof(self_type) + sizeof(slot_type) * node->capacity +
-                                 sizeof(unsigned int) * ((node->capacity >> 5) + 1);
+        inline static void delete_segment(self_type *node) {
+            node_memory_count -= sizeof(self_type) + sizeof(slot_type) * node->capacity + sizeof(unsigned int) * ((node->capacity >> 5) + 1);
             std::free(node);
         }
     };
@@ -337,6 +318,7 @@ namespace Hits {
         }
         return result;
     }
+
     template<class key_T, class value_T>
     class Index {
     public:
@@ -523,14 +505,7 @@ namespace Hits {
         void random_rebuild() {
             ++rebuild_step;
             auto status = rebuild_step;
-//            puts("rebuild start!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
             while (true) {
-//                sleep(1);
-//                if (status != rebuild_step) {
-//                    ++rebuild_step;
-////                            puts("rebuild stop!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-//                    return;
-//                }
                 puts("rebuild!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
                 for (int root_slot_id = 0; root_slot_id < root->capacity; ++root_slot_id) {
                     auto inner_node = root->array[root_slot_id].inner_node;
@@ -563,13 +538,10 @@ namespace Hits {
                         lock.de_set_backend_position();
                         if (status != rebuild_step) {
                             ++rebuild_step;
-//                            puts("rebuild stop!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
                             return;
                         }
                     }
                     usleep(sleep_time);
-//                    usleep(11190);
-//                    sleep(1);
                 }
             }
         }
@@ -708,69 +680,6 @@ namespace Hits {
                 return true;
             }
         }
-
-//        void range_query_(InnerNode<key_T,value_T> *node,std::vector<std::pair<key_T,value_T>> &result,double upper_bound){
-//            for(int j = 0;j < node->capacity;++j){
-//                //to find a data node (leaf node)
-//                if(get_bitmap(node->bitmap_start(), j)) {
-//                    range_query_(result->array[j].inner_node,result);
-//                }
-//                else{
-//                    auto data_node = result->array[j].data_node;
-//                    for(auto l = 0;l < data_node->capacity;++l) {
-//                        if(get_bitmap(data_node->bitmap_start(),l)){
-//                            if(data_node->array[l].first < upper_bound) {
-//                                result.push_back(data_node->array[l]);
-//                            }
-//                        }
-//                    }
-//                }
-//                if(result->sub_interval(j).second >= upper_bound){
-//                    return;
-//                }
-//            }
-//        }
-//
-//        std::vector<std::pair<key_T,value_T>> range_query(key_T lower_bound, key_T upper_bound) {
-//            std::vector<std::pair<key_T,value_T>> result;
-//            auto key = lower_bound;
-//            auto root_position = root->forward(key);
-//            auto node = root->array[root_position].inner_node;
-//            auto position = node->forward(key);
-//            for(int i = root_position;i<root->capacity;++i){
-//                auto sub_root = root->array[i].inner_node;
-//                for(int j = position;j < sub_root->capacity;++j){
-//#ifdef CB
-//                    lock.set_frontend_position(i, j);
-//#endif
-                    //to find a data node (leaf node)
-//                    if(get_bitmap(node->bitmap_start(), position)) {
-//                        range_query_(sub_root->array[j].inner_node,result,upper_bound);
-//                    }
-//                    else{
-//                        auto data_node = sub_root->array[j].data_node;
-//                        for(auto l = 0;l < data_node->capacity;++l) {
-//                            if(get_bitmap(data_node->bitmap_start(),l)){
-//                                if(data_node->array[l].first < upper_bound) {
-//                                    result.push_back(data_node->array[l]);
-//                                }
-//                            }
-//                        }
-//                    }
-//#ifdef CB
-//                    lock.de_set_frontend_position();
-//#endif
-//                    if(sub_root->sub_interval(j).second >= upper_bound){
-//                        return result;
-//                    }
-//                }
-//                if(root->sub_interval(i).second >= upper_bound){
-//                    return result;
-//                }
-//            }
-//            return result;
-//        }
-
 
         bool get_with_root_leaf(key_T key, value_T &value) {
             if (is_leaf) {

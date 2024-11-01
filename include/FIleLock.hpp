@@ -10,6 +10,8 @@
 #include <fcntl.h>
 #include <csignal>
 #include <utility>
+
+//文件锁
 class FileLock {
     std::string filename;
 public:

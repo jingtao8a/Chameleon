@@ -16,7 +16,7 @@
 #include "../index/include/experience.hpp"
 #include "../index/include/Controller.hpp"
 
-
+static TimerClock tc;
 std::vector<int> query_dis;
 
 std::vector<int> Zipf_GenData(int n) {

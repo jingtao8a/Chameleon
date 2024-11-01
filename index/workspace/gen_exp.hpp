@@ -9,7 +9,11 @@
 #include "../../include/DEFINE.h"
 #include "../include/experience.hpp"
 #include "../../include/TimerClock.hpp"
-#include "../../include/StandardScalar.hpp"
+#include <cstdlib>
+#include <vector>
+#include <string>
+#include <queue>
+#include "../../include/DEFINE.h"
 #include "../include/Controller.hpp"
 #include "train.hpp"
 

@@ -27,10 +27,10 @@ namespace Hits {
 
         static Configuration default_configuration() {
             Configuration conf;
-            conf.root_fan_out = default_root;
+            conf.root_fan_out = default_root;//30000
             for(auto &i:conf.fan_outs){
                 for(auto &j:i){
-                    j = default_inner;
+                    j = default_inner;//100
                 }
             }
             return conf;
@@ -98,17 +98,6 @@ namespace Hits {
             return conf;
         }
 
-//        Configuration operator/(const Configuration &x) {
-//            auto conf = *this;
-//            conf.root_fan_out /= x.root_fan_out;
-//            for (int i = 0; i < INNER_FANOUT_ROW; ++i) {
-//                for (int j = 0; j < INNER_FANOUT_COLUMN; ++j) {
-//                    conf.fan_outs[i][j] /= x.fan_outs[i][j];
-//                }
-//            }
-//            return conf;
-//        }
-
         Configuration operator/(float x) {
             auto conf = *this;
             conf.root_fan_out /= x;
@@ -153,7 +142,7 @@ namespace Hits {
             return conf;
         }
 
-        friend std::ostream &operator<<(std::ostream &out, Configuration &input)    //进来后又出去
+        friend std::ostream &operator<<(std::ostream &out, Configuration &input)
         {
             out << "root:" << input.root_fan_out << std::endl;
             for (int i = 0; i < INNER_FANOUT_ROW; i++) {

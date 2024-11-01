@@ -6,9 +6,12 @@
 #define HITS_Q_MODEL_H
 
 #include <utility>
-
+#include <cstdlib>
+#include <vector>
+#include <string>
+#include <queue>
+#include "../../include/DEFINE.h"
 #include "../../include/Model.hpp"
-#include "../../include/StandardScalar.hpp"
 #include "experience.hpp"
 
 #include "../include/Parameter.h"
@@ -59,10 +62,11 @@ public:
         std_var = std_var.to(GPU_DEVICE);
     }
 
-    torch::Tensor forward_and_fit(torch::Tensor &x) {
-        mean = mean * (float(1.0) - scalar_eps) + scalar_eps * x.mean(0);
+    torch::Tensor forward_and_fit(torch::Tensor &x) {//根据输入数据对均值和方差的更新，再输出 z-score归一化后的x张量
+        //scalar_eps为一个小常数
+        mean = mean * (float(1.0) - scalar_eps) + scalar_eps * x.mean(0);//x在第0维的均值
         /////////////
-        var = var * (float(1.0) - scalar_eps) + scalar_eps * x.var(0);
+        var = var * (float(1.0) - scalar_eps) + scalar_eps * x.var(0);//x在第0维的方差
         std_var = torch::sqrt(var);
         if (scalar_eps > min_scalar_eps) { scalar_eps *= 0.97; }
         return forward(x);
@@ -80,7 +84,7 @@ public:
         mean = mean.to(CPU_DEVICE);
         var = var.to(CPU_DEVICE);
         std::ofstream file(model_name);
-        file << std::setprecision(40);
+        file << std::setprecision(40);//设置输入精度为40
         for (auto i: std::vector<float>(mean.data_ptr<float>(),
                                         mean.data_ptr<float>() + mean.numel())) {
             file << i << " ";
@@ -124,10 +128,12 @@ public:
 class Global_Q_network : public torch::nn::Module {
 private:
     ////////////////////////
+    //pdf卷积层的通道数、卷积核大小、步长和填充
     std::vector<int> pdf_cnn_channel = {1,16, 32,64, 128,192,256};
     std::vector<int> pdf_cnn_kernel = {6, 6, 7, 6, 4, 3};
     std::vector<int> pdf_cnn_stride = {5, 5, 5, 5, 2, 2};
     std::vector<int> pdf_cnn_padding = {1, 2, 1, 0, 1, 0};
+    //pdf池化层的内核大小、步长、填充
     std::vector<int> pdf_pool_kernel = {2, 2, 2, 2, 3, 2};
     std::vector<int> pdf_pool_stride = {1, 1, 1, 1, 2, 1};
     std::vector<int> pdf_pool_padding = {1, 0, 1, 1, 0, 0};
@@ -232,119 +238,6 @@ public:
         return concat;
     }
 };
-
-//
-//class Global_Q_network : public torch::nn::Module {
-//private:
-//    ////////////////////////
-//    std::vector<int> pdf_cnn_channel = {1, 8, 16, 32, 64, 128, 256};
-//    std::vector<int> pdf_cnn_kernel = {15, 15, 11, 11, 5, 2};
-//    std::vector<int> pdf_cnn_stride = {1, 1, 1, 1, 1, 1};
-//    std::vector<int> pdf_cnn_padding = {7, 7, 5, 5, 2, 0};
-//    std::vector<int> pdf_pool_kernel = {12, 11, 11, 9, 7, 1};
-//    std::vector<int> pdf_pool_stride = {8, 8, 8, 6, 3, 1};
-//    std::vector<int> pdf_pool_padding = {6, 5, 5, 3, 2, 0};
-//    std::shared_ptr<CV_1D_STACK> pdf_cnn_stack;
-//    ///////////////////////////////////////////////////////
-//    std::vector<int> fanout_cnn_channel = {1, 8, 16, 32, 64, 96, 128, 192, 256};
-//    std::vector<int> fanout_cnn_kernel_x = {2, 1, 1, 1, 1, 1, 1, 1};
-//    std::vector<int> fanout_cnn_stride_x = {1, 1, 1, 1, 1, 1, 1, 1};
-//    std::vector<int> fanout_cnn_padding_x = {0, 0, 0, 0, 0, 0, 0, 0};
-//    std::vector<int> fanout_pool_kernel_x = {1, 1, 1, 1, 1, 1, 1, 1};
-//    std::vector<int> fanout_pool_stride_x = {1, 1, 1, 1, 1, 1, 1, 1};
-//    std::vector<int> fanout_pool_padding_x = {0, 0, 0, 0, 0, 0, 0, 0};
-//    std::vector<int> fanout_cnn_kernel_y = {5, 5, 5, 5, 4, 4, 4, 2};
-//    std::vector<int> fanout_cnn_stride_y = {1, 1, 1, 1, 1, 1, 1, 1};
-//    std::vector<int> fanout_cnn_padding_y = {1, 1, 1, 0, 2, 1, 1, 0};
-//    std::vector<int> fanout_pool_kernel_y = {4, 3, 3, 3, 3, 3, 3, 1};
-//    std::vector<int> fanout_pool_stride_y = {2, 2, 2, 2, 2, 2, 2, 1};
-//    std::vector<int> fanout_pool_padding_y = {1, 1, 1, 1, 1, 1, 1, 0};
-//    std::shared_ptr<CV_2D_STACK> fanout_cnn_stack;
-//    ////////////////////////////////////////////////
-//    //////////////////////////////////////////////////////
-//    std::vector<int> fc_sizes = {fc_neuron_size, fc_neuron_size};
-//    std::vector<std::shared_ptr<LN>> fcs;
-//    torch::nn::Linear fc_out = nullptr;
-//    torch::nn::BatchNorm1d root_fanout_bn = nullptr;
-//    torch::nn::BatchNorm2d inner_fanout_bn = nullptr;
-//    torch::nn::BatchNorm1d value_bn = nullptr;
-//public:
-//    Global_Q_network() {
-//        int pdf_size = PDF_SIZE;
-//        pdf_cnn_stack = register_module(
-//                "pdf_cnn",
-//                std::make_shared<CV_1D_STACK>(CV_1D_STACK(pdf_cnn_channel,
-//                                                          pdf_cnn_kernel,
-//                                                          pdf_cnn_stride,
-//                                                          pdf_cnn_padding,
-//                                                          pdf_pool_kernel,
-//                                                          pdf_pool_stride,
-//                                                          pdf_pool_padding,
-//                                                          pdf_size
-//                )));
-//        int fanout_row = INNER_FANOUT_ROW + 1;
-//        int fanout_column = INNER_FANOUT_COLUMN;
-//        fanout_cnn_stack = register_module(
-//                "fanout_cnn",
-//                std::make_shared<CV_2D_STACK>(CV_2D_STACK(fanout_cnn_channel,
-//                                                          fanout_cnn_kernel_x,
-//                                                          fanout_cnn_stride_x,
-//                                                          fanout_cnn_padding_x,
-//                                                          fanout_pool_kernel_x,
-//                                                          fanout_pool_stride_x,
-//                                                          fanout_pool_padding_x,
-//                                                          fanout_row,
-//                                                          fanout_cnn_kernel_y,
-//                                                          fanout_cnn_stride_y,
-//                                                          fanout_cnn_padding_y,
-//                                                          fanout_pool_kernel_y,
-//                                                          fanout_pool_stride_y,
-//                                                          fanout_pool_padding_y,
-//                                                          fanout_column
-//                )));
-//        root_fanout_bn = register_module("root_fanout_bn", torch::nn::BatchNorm1d(torch::nn::BatchNorm1dOptions(1)));
-//        inner_fanout_bn = register_module("inner_fanout_bn", torch::nn::BatchNorm2d(torch::nn::BatchNorm2dOptions(1)));
-//        value_bn = register_module("value_bn", torch::nn::BatchNorm1d(torch::nn::BatchNorm1dOptions(1)));
-//        int out_size = pdf_size * pdf_cnn_channel.back() + VALUE_SIZE + fanout_row * fanout_column * fanout_cnn_channel.back();
-//        for (std::size_t i = 0; i < fc_sizes.size(); i++) {
-//            fcs.push_back(register_module("fc_" + std::to_string(i),
-//                                          std::make_shared<LN>(LN(out_size, fc_sizes[i]))));
-//            out_size = fc_sizes[i];
-//        }
-//        fc_out = register_module("fcs", torch::nn::Linear(out_size, REWARD_SIZE));
-//    }
-//
-//    auto
-//    forward(torch::Tensor pdf, torch::Tensor value, torch::Tensor root_fanout, torch::Tensor inner_fanout) {
-//        auto sample_number = pdf.size(0);
-//        pdf = pdf.view({pdf.size(0), 1, pdf.size(1)});
-//        pdf = pdf_cnn_stack->forward(pdf);
-//        pdf = pdf.view({sample_number, -1});
-//        ////////fanout_cnn
-//        root_fanout = root_fanout.view({sample_number, 1, root_fanout.size(1)});
-//        root_fanout = root_fanout_bn->forward(root_fanout);
-//        root_fanout = root_fanout.view({sample_number, 1, root_fanout.size(2), 1});
-//        root_fanout = root_fanout.mul(
-////                torch::ones({sample_number, 1, root_fanout.size(2), INNER_FANOUT_COLUMN}).to(torch::Device(torch::DeviceType::CUDA,1)));
-//                torch::ones({sample_number, 1, root_fanout.size(2), INNER_FANOUT_COLUMN}).to(GPU_DEVICE));
-//        inner_fanout = inner_fanout.view({sample_number, 1, inner_fanout.size(1), inner_fanout.size(2)});
-//        inner_fanout = inner_fanout_bn->forward(inner_fanout);
-//        auto all_fanout = torch::cat({root_fanout, inner_fanout}, 2);
-//        all_fanout = fanout_cnn_stack->forward(all_fanout);
-//        all_fanout = all_fanout.view({sample_number, -1});//decrease one dimension
-//        ////////////////////////
-//        value = value.view({sample_number, 1, value.size(1)});
-//        value = value_bn->forward(value);
-//        value = value.view({sample_number, 1});
-//        auto concat = torch::hstack({pdf, all_fanout, value});
-//        /////out_fc
-//        for (auto &fc: fcs) {
-//            concat = fc->forward(concat);
-//        }
-//        concat = fc_out->forward(concat);
-//        return concat;
-//    }
-//};
 
 std::vector<float> action_space = {0, 1, 2, 3, 4, 5 ,6, 7, 8};
 //std::vector<float> action_space = {0, 1, 2, 3, 4, 5 ,6, 7, 8,9,10};
@@ -549,112 +442,5 @@ public:
         return std::pair<torch::Tensor, torch::Tensor>(root_fanout, inner_fanout);
     }
 };
-
-
-//class PAI_Utils {
-//    std::shared_ptr<Global_PAI_network> model;
-//    std::shared_ptr<torch::optim::Adam> optimizer;
-//public:
-//    void train(bool on = true) {
-//        model->train(on);
-//    }
-//
-//    bool is_train() {
-//        return model->is_training();
-//    }
-//
-//    void eval() {
-//        model->eval();
-//    }
-//
-//    void to_CPU() {
-//        model->to(CPU_DEVICE);
-//    }
-//
-//    void to_GPU() {
-//        model->to(GPU_DEVICE);
-//    }
-//
-//    void flush_model() {
-//        auto device = model->parameters().data()->device();
-//        model = std::make_shared<Global_PAI_network>(Global_PAI_network());
-//        model->eval();
-//        model->to(device);
-//        optimizer = std::make_shared<torch::optim::Adam>(
-//                torch::optim::Adam(
-//                        model->parameters(),
-//                        torch::optim::AdamOptions(train_lr).
-//                                weight_decay(train_wd)));
-//    }
-//
-//    void decrease_LR() {
-//        optimizer->param_groups()[0].options().set_lr(optimizer->param_groups()[0].options().get_lr() / 3);
-//        std::cout << "optimizer->param_groups()[0].options().get_lr() :"
-//                  << optimizer->param_groups()[0].options().get_lr() << std::endl;
-//    }
-//
-//    double get_LR() {
-//        return optimizer->param_groups()[0].options().get_lr();
-//    }
-//
-//    explicit PAI_Utils() {
-//        model = std::make_shared<Global_PAI_network>(Global_PAI_network());
-//        model->eval();
-//        optimizer = std::make_shared<torch::optim::Adam>(
-//                torch::optim::Adam(
-//                        model->parameters(),
-//                        torch::optim::AdamOptions(train_lr).
-//                                weight_decay(train_wd)));
-//    }
-//
-//    auto fit_Net(const Q_Utils &q_utils, const torch::Tensor &pdf, const torch::Tensor &value,
-//                  float MEMORY_WEIGHT,float query_weight) {
-//        auto weight_tensor = torch::tensor({MEMORY_WEIGHT,query_weight}).to(GPU_DEVICE);
-//        auto fanout = model->forward(pdf, value.detach(), weight_tensor);
-//        auto reward = q_utils.predict(pdf, value, fanout.second, fanout.first).mul(
-//                torch::tensor({MEMORY_WEIGHT,query_weight}, c10::requires_grad()).detach().to(GPU_DEVICE).view({1,2})
-//                );
-//        reward = reward.first_moment();
-//        std::cout <<"reward:"<<reward<< std::endl;
-//        optimizer->zero_grad();
-//        reward.backward();
-//        optimizer->step();
-//        return reward.to(CPU_DEVICE).item().toFloat();
-//    }
-
-//    auto
-//    predict(const torch::Tensor &pdf, const torch::Tensor &value,
-//            const torch::Tensor &inner_fanout, const torch::Tensor &other_fanout) {
-//        auto pred = model->forward(pdf.detach(), value.detach(), inner_fanout.detach(), other_fanout.detach()).detach();
-//        de_standard_reward(pred);
-//        return pred;
-//    }
-
-
-//    void load_model(const std::string &model_name) {
-//        FileLock fl(model_name);
-//        if (fl.lock()) {
-//            std::cout << "lock:" << model_name << " failed !" << std::endl;
-//        }
-//        if (IsFileExist((model_father_path + model_name + "_PAI_Net.pt").c_str())) {
-//            torch::load(model, model_father_path + model_name + "_PAI_Net.pt");
-//        } else {
-//            model->eval();
-//            to_GPU();
-//        }
-//        if (fl.unlock()) {
-//            std::cout << "unlock:" << model_name << " failed !" << std::endl;
-//        }
-//    }
-//
-//    void save_models(const std::string &model_name) {
-//        FileLock fl(model_name);
-//        fl.lock();
-//        torch::save(model, model_father_path + model_name + "_PAI_Net.pt");
-//        fl.unlock();
-//    }
-//
-//};
-
 
 #endif //HITS_Q_MODEL_H

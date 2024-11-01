@@ -13,7 +13,7 @@
 #include "../index/include/Controller.hpp"
 
 int train_size;
-
+static TimerClock tc;
 GlobalController controller;
 int add_times, erase_times;
 

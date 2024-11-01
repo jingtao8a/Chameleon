@@ -15,10 +15,10 @@
 
 class Cost {
 public:
-    float memory;
+    float memory;//内存占用
     float add;
     float get;
-    float erase;
+    float erase;//查询开销
 
     Cost() {
         memory = 0;
@@ -27,7 +27,7 @@ public:
         erase = 0;
     }
 
-    friend std::ostream &operator<<(std::ostream &out, Cost &input)    //进来后又出去
+    friend std::ostream &operator<<(std::ostream &out, Cost &input)
     {
         out << " " << std::setprecision(12) << input.memory <<std::setprecision(6)<< " : "
             << std::setw(6) << input.add << " : " << std::setw(6) << input.get << " : " << std::setw(6) << input.erase;
@@ -35,13 +35,14 @@ public:
     }
 };
 
-
+//经验包括 state action reward
 class experience_t {
 public:
+    //state
     float distribution[BUCKET_SIZE]{};
     float data_size;
-    Hits::Configuration conf;
-    Cost cost;
+    Hits::Configuration conf;//action
+    Cost cost;//reward
 
 public:
     experience_t() {
@@ -61,7 +62,7 @@ public:
         cost.erase = 0;
     }
 
-    friend std::ostream &operator<<(std::ostream &out, experience_t &input)    //进来后又出去
+    friend std::ostream &operator<<(std::ostream &out, experience_t &input)
     {
         out << input.conf << " ";
         out << input.cost << " ";
@@ -92,6 +93,7 @@ int clear_exp(const std::string &parent_path, const std::vector<std::string> &fi
     return 0;
 }
 
+//experience目录下的n.exp的最大编号n
 int max_exp_number(const std::vector<std::string> &files) {
     int result = 0;
     for (auto &i: files) {
@@ -100,6 +102,7 @@ int max_exp_number(const std::vector<std::string> &files) {
     return result;
 }
 
+//统计experience_t的个数
 std::size_t count_exp(const std::vector<std::string> &files) {
     std::size_t result = 0;
     for (auto &i: files) {
@@ -111,6 +114,7 @@ std::size_t count_exp(const std::vector<std::string> &files) {
     return result;
 }
 
+//读取experience_t
 std::vector<experience_t> read_exp(const std::vector<std::string> &files) {
     std::vector<experience_t> all_exps;
     auto all_size = int(count_exp(files));
@@ -136,8 +140,7 @@ std::vector<experience_t> read_exp(const std::vector<std::string> &files) {
     return all_exps;
 }
 
-std::pair<std::vector<experience_t>, std::vector<experience_t>>
-read_exp_and_split(const std::vector<std::string> &files) {
+std::pair<std::vector<experience_t>, std::vector<experience_t>> read_exp_and_split(const std::vector<std::string> &files) {
     auto temp_e = e;
     temp_e.seed(1000);
     std::vector<experience_t> all_exps;
@@ -185,7 +188,10 @@ read_exp_and_split(const std::vector<std::string> &files) {
 
 #include <regex>
 #include "../../include/TimerClock.hpp"
-#include "../../include/StandardScalar.hpp"
+#include <cstdlib>
+#include <vector>
+#include <string>
+#include <queue>
 
 class ExpGenerator {
 public:
@@ -219,6 +225,7 @@ public:
             }
         }
     }
+    //读取experience目录中的experience_t存储到exps中
     ExpGenerator(){
         auto files = scanFiles(experience_father_path);
         exps = read_exp(files);
@@ -259,7 +266,7 @@ public:
 
     inline
     std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
-    exp_batch(int batch_size) {
+    exp_batch(int batch_size) {//获取批量的experience_t
         std::vector<experience_t> result(batch_size);
         for (int i = 0;i<batch_size;++i) {
             result[i] = exps[e() % exps.size()];

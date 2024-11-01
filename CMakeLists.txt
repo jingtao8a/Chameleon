@@ -9,7 +9,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-march=native  ${CMAKE_CXX_FLAGS_RELEASE}")
 # set(CMAKE_PREFIX_PATH /home/chengang/chengang/jingtao8a/Chameleon/libtorch)
 
 set(gpu_device torch::kCUDA)
-set(data_father_path "\"/home/chengang/chengang/jingtao8a/Chameleon/data\"")
+set(data_father_path "\"/home/chengang/chengang/jingtao8a/Chameleon/data/\"")
 
 set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
 #set(Torch_DIR /home/chengang/chengang/jingtao8a/Chameleon/libtorch/share/cmake/Torch)

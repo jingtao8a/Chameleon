@@ -13,10 +13,14 @@
 #include<ctime>
 #include "../include/experience.hpp"
 #include "../../include/TimerClock.hpp"
-#include "../../include/StandardScalar.hpp"
+#include <cstdlib>
+#include <vector>
+#include <string>
+#include <queue>
+#include "../../include/DEFINE.h"
 #include "../include/experience.hpp"
 #include "../include/RL_network.hpp"
-
+static TimerClock tc;
 [[noreturn]] void train(){
     auto q_model = std::make_shared<Global_Q_network>(Global_Q_network());
     q_model->to(GPU_DEVICE);
